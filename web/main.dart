@@ -52,6 +52,7 @@ Future<void> main() async {
     querySelector('#serious') as DivElement,
     InstantRunOffVoting(),
     bunchOfVoters,
+    // TODO: take voters from textfield
   );
 
   await serious.init();
