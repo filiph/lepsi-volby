@@ -55,3 +55,7 @@ button[disabled] {
 
   transition: width 200ms;
 }
+
+.signed {
+  text-align: right;
+}

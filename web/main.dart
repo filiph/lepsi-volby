@@ -52,7 +52,7 @@ Future<void> main() async {
     querySelector('#serious') as DivElement,
     InstantRunOffVoting(),
     bunchOfVoters,
-    // TODO: take voters from textfield
+    votersInput: true,
   );
 
   await serious.init();
@@ -67,17 +67,23 @@ class VotingEmbed<T extends Candidate> {
 
   final TableElement _barGraphElement;
 
+  final TextAreaElement? _votersInput;
+
   final InstantRunOffVoting<T> _voting;
 
-  final List<Voter<T>> _voters;
+  List<Voter<T>> _voters;
 
-  VotingEmbed(DivElement element, this._voting, this._voters)
+  VotingEmbed(DivElement element, this._voting, this._voters,
+      {bool votersInput = false})
       : _logElement = element.querySelector('.log') as UListElement,
         _happinessElement = element.querySelector('.happiness') as DivElement,
         _barGraphElement = element.querySelector('.bargraph') as TableElement,
         _buttonElement =
             element.querySelector('.start_button') as ButtonElement,
-        maxVotes = _voters.length;
+        _votersInput = votersInput
+            ? element.querySelector('.voters-input') as TextAreaElement
+            : null,
+        _maxVotes = _voters.length;
 
   Future<void> init() async {
     _buttonElement.onClick.listen((event) {
@@ -92,13 +98,26 @@ class VotingEmbed<T extends Candidate> {
 
   /// This is the maximum votes we expect a candidate will get. We use it for
   /// scaling the bar charts.
-  final int maxVotes;
+  int _maxVotes;
 
   final Duration _stepDuration = const Duration(milliseconds: 400);
 
   void _handleStart() async {
     _logElement.children.clear();
     _happinessElement.children.clear();
+
+    if (_votersInput != null) {
+      final votersCSV = _votersInput!.value;
+      print(votersCSV);
+      _voters = _parseVoters(votersCSV!);
+      if (_voters.isEmpty) {
+
+      }
+      _maxVotes = _voters.length;
+      _progress = _voting.vote(_voters).toList();
+      print('done');
+      _setUpUI(_progress!.first);
+    }
 
     for (final report in _progress!) {
       if (report.isFinished) {
@@ -137,6 +156,13 @@ class VotingEmbed<T extends Candidate> {
   void _setUpUI(ProgressReport<T> initial) {
     assert(initial.round == 0);
     _bars.clear();
+    _countCells.clear();
+    _tableRows.clear();
+    _barGraphElement.children.clear();
+    final headRow = _barGraphElement.addRow();
+    headRow.children.add(Element.th()..text = 'Restaurace');
+    headRow.children.add(Element.th());
+    headRow.children.add(Element.th()..text = 'Hlasy');
     for (var candidate in initial.results.keys) {
       final row = _barGraphElement.addRow();
       _tableRows[candidate] = row;
@@ -173,7 +199,7 @@ class VotingEmbed<T extends Candidate> {
       if (votes == 0) {
         width = '1px';
       } else {
-        width = '${votes / maxVotes * 100}%';
+        width = '${votes / _maxVotes * 100}%';
       }
       bar.style.width = width;
       bar.style.backgroundColor = isEliminated ? 'gray' : 'blue';
@@ -237,6 +263,23 @@ class VotingEmbed<T extends Candidate> {
       return;
     }
   }
+
+  List<Voter<T>> _parseVoters(String string) {
+    final result = <Voter<_StringCandidate>>[];
+
+    var i = 1;
+    final lines =
+        string.split('\n').map((e) => e.trim()).where((e) => e.isNotEmpty);
+    for (var line in lines) {
+      final voteStrings =
+          line.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty);
+      final votes = <_StringCandidate>[
+        for (var vote in voteStrings) _StringCandidate(vote),
+      ];
+      result.add(Voter(name: 'Volič ${i++}')..votes = votes);
+    }
+    return result as List<Voter<T>>;
+  }
 }
 
 class _StringCandidate extends Candidate {
@@ -248,4 +291,12 @@ class _StringCandidate extends Candidate {
   String toString() {
     return '$name';
   }
+
+  @override
+  bool operator ==(Object other) {
+    return other is _StringCandidate && name == other.name;
+  }
+
+  @override
+  int get hashCode => name.hashCode;
 }
