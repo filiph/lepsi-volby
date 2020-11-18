@@ -122,6 +122,8 @@ class VotingEmbed<T extends Candidate> {
   /// The other emoji shows up as a box on Windows 7.
   final String _happyFace = _isWin7 ? '😄' : '😀';
 
+  final String _sadFace = _isWin7 ? '😕' : '😡';
+
   final String candidateNominative, candidateAccusative;
 
   VotingEmbed(
@@ -225,7 +227,7 @@ class VotingEmbed<T extends Candidate> {
       ..innerHtml = '${voter.name} '
           'je '
           '${happyVoter ? '' : 'ne'}spokojen${voter.feminine ? 'á' : 'ý'}. '
-          '<em>${happyVoter ? _happyFace : '😡'}</em>';
+          '<em>${happyVoter ? _happyFace : _sadFace}</em>';
     _logElement.children.add(element);
   }
 
