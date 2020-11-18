@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'dart:html';
 
+import 'package:async/async.dart';
 import 'package:instant_run_off_voting/instant_run_off_voting.dart';
 
 Future<void> main() async {
@@ -19,17 +21,14 @@ Future<void> main() async {
   final maznak = _StringCandidate('Mažňák');
   final tleskac = _StringCandidate('Tleskač');
   final losna = _StringCandidate('Losna');
-  final mirek = _StringCandidate('Mirek');
+  final dusin = _StringCandidate('Dušín');
 
   final bunchOfVoters = <Voter>[
-    for (var i = 0; i < 200; i++) Voter()..votes = [maznak],
-    for (var i = 0; i < 200; i++) Voter()..votes = [maznak, tleskac],
-    for (var i = 0; i < 150; i++) Voter()..votes = [tleskac, mirek],
-    for (var i = 0; i < 200; i++) Voter()..votes = [tleskac, mirek, losna],
-    for (var i = 0; i < 200; i++) Voter()..votes = [mirek, losna],
-    for (var i = 0; i < 100; i++) Voter()..votes = [mirek, tleskac, losna],
-    for (var i = 0; i < 100; i++) Voter()..votes = [losna, tleskac],
-    for (var i = 0; i < 100; i++) Voter()..votes = [losna, mirek],
+    Voter()..votes = [maznak, tleskac],
+    Voter()..votes = [losna, tleskac],
+    Voter()..votes = [tleskac, maznak],
+    Voter()..votes = [losna, tleskac],
+    Voter()..votes = [tleskac, losna, dusin],
   ]..shuffle();
 
   final plurality = VotingEmbed(
@@ -61,9 +60,9 @@ Future<void> main() async {
 class VotingEmbed<T extends Candidate> {
   final UListElement _logElement;
 
-  final ButtonElement _buttonElement;
+  final ButtonElement? _playButton;
 
-  final DivElement _happinessElement;
+  final ButtonElement? _stepButton;
 
   final TableElement _barGraphElement;
 
@@ -71,27 +70,53 @@ class VotingEmbed<T extends Candidate> {
 
   final InstantRunOffVoting<T> _voting;
 
+  late final StreamQueue<void> _stepAheadQueue =
+      StreamQueue<void>(_stepAhead.stream);
+
+  bool isFinished = false;
+
+  final StreamController<void> _stepAhead = StreamController();
+
   List<Voter<T>> _voters;
 
   VotingEmbed(DivElement element, this._voting, this._voters,
       {bool votersInput = false})
       : _logElement = element.querySelector('.log') as UListElement,
-        _happinessElement = element.querySelector('.happiness') as DivElement,
         _barGraphElement = element.querySelector('.bargraph') as TableElement,
-        _buttonElement =
-            element.querySelector('.start_button') as ButtonElement,
+        _playButton = element.querySelector('.start_button') as ButtonElement?,
+        _stepButton = element.querySelector('.step_button') as ButtonElement?,
         _votersInput = votersInput
             ? element.querySelector('.voters-input') as TextAreaElement
             : null,
         _maxVotes = _voters.length;
 
   Future<void> init() async {
-    _buttonElement.onClick.listen((event) {
-      _handleStart();
-      _buttonElement.disabled = true;
+    _playButton?.onClick.listen((event) {
+      if (isFinished) {
+        _setUpUI(_progress!.first);
+        _walkThroughSteps();
+        isFinished = false;
+      }
+
+      // The first impulse (so that we parse voters).
+      _stepAhead.add(null);
+      _stepDuration = Duration(milliseconds: (2000 / _maxVotes).ceil());
+      Timer.periodic(_stepDuration, (timer) {
+        if (isFinished || _voters.isEmpty) {
+          // Stop the timer if we've finished or if the input is invalid.
+          timer.cancel();
+          isFinished = true;
+          return;
+        }
+        _stepAhead.add(null);
+      });
+    });
+    _stepButton?.onClick.listen((event) {
+      _stepAhead.add(event);
     });
     _progress = _voting.vote(_voters).toList();
     _setUpUI(_progress!.first);
+    _walkThroughSteps();
   }
 
   List<ProgressReport<T>>? _progress;
@@ -100,51 +125,53 @@ class VotingEmbed<T extends Candidate> {
   /// scaling the bar charts.
   int _maxVotes;
 
-  final Duration _stepDuration = const Duration(milliseconds: 400);
+  Duration _stepDuration = const Duration(milliseconds: 16);
 
-  void _handleStart() async {
+  void _walkThroughSteps() async {
+    // Wait until the first "step".
+    await _stepAheadQueue.next;
+
+    _playButton?.disabled = true;
     _logElement.children.clear();
-    _happinessElement.children.clear();
+    _logElement.children.add(Element.li()
+      ..text = 'Všichni na značkách. Zde sledujte průběh hlasování.');
 
     if (_votersInput != null) {
       final votersCSV = _votersInput!.value;
-      print(votersCSV);
       _voters = _parseVoters(votersCSV!);
       if (_voters.isEmpty) {
-
+        window.alert('Žádní voliči nepřišli.');
+        _playButton?.disabled = false;
+        return;
       }
       _maxVotes = _voters.length;
       _progress = _voting.vote(_voters).toList();
-      print('done');
       _setUpUI(_progress!.first);
     }
 
-    for (final report in _progress!) {
-      if (report.isFinished) {
-        // Extra wait for dramatic effect.
-        await Future.delayed(_stepDuration);
-      }
-      _updateUI(report);
-      await Future.delayed(_stepDuration);
+    for (final report in _progress!.skip(1)) {
+      await _updateUI(report);
     }
 
-    await Future.delayed(_stepDuration);
     assert(_progress!.last.happyVoters.isNotEmpty);
 
-    await Future.delayed(_stepDuration);
-    await Future.delayed(_stepDuration);
-    _logElement.children
-        .add(Element.li()..text = 'Jak jsou lidé spokojení s výsledkem?');
-    _logElement.scrollTop = _logElement.scrollHeight;
-    await Future.delayed(_stepDuration);
-    await Future.delayed(_stepDuration);
-    await Future.delayed(_stepDuration);
     for (var voter in _voters) {
       _showHappiness(voter, _progress!.last.happyVoters[voter]!);
       _logElement.scrollTop = _logElement.scrollHeight;
-      await Future.delayed(_stepDuration);
+      await _stepAheadQueue.next;
     }
-    _buttonElement.disabled = false;
+    final percentage = 1 -
+        _progress!.last.happyVoters.entries
+                .where((element) => element.value)
+                .length /
+            _voters.length;
+    _logElement.children.add(Element.li()
+      ..text = '${(percentage * 100).round()} % voličů je nespokojených.');
+    _logElement.scrollTop = _logElement.scrollHeight;
+
+    _playButton?.disabled = false;
+    _stepButton?.disabled = true;
+    isFinished = true;
   }
 
   final Map<T, SpanElement> _bars = {};
@@ -187,9 +214,10 @@ class VotingEmbed<T extends Candidate> {
     }
   }
 
-  void _updateUI(ProgressReport<T> report) {
+  Future<void> _updateUI(ProgressReport<T> report) async {
+    // Update bar graph for each candidate.
     for (var candidate in report.results.keys) {
-      final isEliminated = report.worstThisRound.contains(candidate);
+      final isEliminated = report.eliminatedLastRound.contains(candidate);
       final isWinner = report.isFinished && report.winner == candidate;
       final countCell = _countCells[candidate]!;
       final bar = _bars[candidate]!;
@@ -208,8 +236,7 @@ class VotingEmbed<T extends Candidate> {
       }
     }
 
-    _updateLog(report);
-    _logElement.scrollTop = _logElement.scrollHeight;
+    await _updateLog(report);
   }
 
   void _showHappiness(Voter<T> voter, bool happyVoter) {
@@ -221,9 +248,11 @@ class VotingEmbed<T extends Candidate> {
     _logElement.children.add(element);
   }
 
-  void _updateLog(ProgressReport<T> report) {
-    void add(String message) {
+  Future<void> _updateLog(ProgressReport<T> report) async {
+    Future<void> add(String message) async {
       _logElement.children.add(Element.li()..innerHtml = message);
+      _logElement.scrollTop = _logElement.scrollHeight;
+      await _stepAheadQueue.next;
     }
 
     if (report.givenVote != null) {
@@ -237,8 +266,9 @@ class VotingEmbed<T extends Candidate> {
           '${firstVote}');
       if (otherVotes.isNotEmpty) {
         if (_voting.isPluralityVoting) {
-          buf.write(' (ale dal${voter.feminine ? 'a' : ''} by za vděk '
-              'také restauracím ${otherVotes.join(' nebo ')})');
+          buf.write(' (ale nevadil${otherVotes.length > 1 ? 'y' : 'a'} by '
+              '${voter.feminine ? 'jí' : 'mu'} ani '
+              'restaurace ${otherVotes.join(' nebo ')})');
         } else {
           buf.write(' v prvé řadě, ale dále také pro restaurace '
               '${otherVotes.join(' a ')}');
@@ -246,21 +276,27 @@ class VotingEmbed<T extends Candidate> {
       }
       buf.write('.');
 
-      add(buf.toString());
+      await add(buf.toString());
+      return;
+    }
+
+    if (report.round > 0) {
+      await add('Současný stav: ${report.results}.');
+    }
+
+    if (report.isFinished) {
+      await add('<strong>Je rozhodnuto!</strong> '
+          'Vyhrává restaurace <strong>${report.winner!}</strong>. '
+          '(Klikejte dál, abyste zjistili, '
+          'jak jsou lidé spokojení s výsledkem.)');
       return;
     }
 
     if (report.worstThisRound.isNotEmpty) {
       assert(report.worstThisRound.length == 1);
-      add('Restaurace ${report.worstThisRound.single} má moc málo hlasů. '
+      await add('Restaurace ${report.worstThisRound.single} má moc málo hlasů. '
           'Vypadává. Hlasy lidí, co pro ni hlasovali, se přemístí do jejich '
           'druhé či třetí oblíbené volby.');
-    }
-
-    if (report.isFinished) {
-      add('<strong>Je rozhodnuto!</strong> '
-          'Vyhrává restaurace <strong>${report.winner!}</strong>.');
-      return;
     }
   }
 

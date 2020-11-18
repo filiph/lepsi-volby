@@ -119,6 +119,12 @@ class InstantRunOffVoting<T extends Candidate> {
       final survivingCandidates =
           _candidates.difference(Set.from(eliminated)).toList();
 
+      /// Assign a zero value to eliminated candidate (otherwise they're
+      /// missing from the progress altogether).
+      for (final candidate in eliminated) {
+        currentResults[candidate] = 0;
+      }
+
       // There could be more than one candidate with least amount of votes.
       // (A tie in the last place.)
       final worstCandidates = survivingCandidates
