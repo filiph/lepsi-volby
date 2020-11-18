@@ -4,6 +4,10 @@ import 'dart:html';
 import 'package:async/async.dart';
 import 'package:instant_run_off_voting/instant_run_off_voting.dart';
 
+/// Windows 7 needs some special cases.
+final bool _isWin7 =
+    window.navigator.userAgent.toLowerCase().contains('windows nt 6.1');
+
 Future<void> main() async {
   final hogofogo = _StringCandidate('Hogofogo'); //  🍸
   final restyka = _StringCandidate('Reštyka'); //  🍷
@@ -11,12 +15,30 @@ Future<void> main() async {
   final pivko = _StringCandidate('Pivko'); // 🍺
 
   final runOffVoters = [
-    Voter(name: 'Eva 👩🏻‍🦰', feminine: true)..votes = [hogofogo, kafe, pivko],
-    Voter(name: 'Jana 👧🏻', feminine: true)..votes = [pivko, kafe, restyka],
-    Voter(name: 'Honza 👨🏽‍🦳')..votes = [hogofogo, restyka, kafe],
-    Voter(name: 'Karel 🧔🏽')..votes = [restyka, pivko, kafe],
-    Voter(name: 'Tomáš 👨🏻')..votes = [kafe, pivko, restyka],
+    Voter(name: 'Eva ${_isWin7 ? '👸' : '👩🏻‍🦰'}', feminine: true)
+      ..votes = [hogofogo, kafe, pivko],
+    Voter(name: 'Jana ${_isWin7 ? '👮' : '👧🏻'}', feminine: true)
+      ..votes = [pivko, kafe, restyka],
+    Voter(name: 'Honza ${_isWin7 ? '🙇' : '👨🏽‍🦳'}')
+      ..votes = [hogofogo, restyka, kafe],
+    Voter(name: 'Karel ${_isWin7 ? '👲' : '🧔🏽'}')
+      ..votes = [restyka, pivko, kafe],
+    Voter(name: 'Tomáš ${_isWin7 ? '🙋' : '👨🏻'}')
+      ..votes = [kafe, pivko, restyka],
   ];
+
+  if (_isWin7) {
+    // Patch emojis to be compatible with Win7 (~10% of devices).
+    const classes = ['fA', 'fB', 'fC', 'fD', 'fE'];
+    const faces = ['👸', '👮', '🙇', '👲', '🙋'];
+    for (var i = 0; i < classes.length; i++) {
+      final className = classes[i];
+      final faceEmoji = faces[i];
+      for (var span in querySelectorAll('span.$className')) {
+        span.text = faceEmoji;
+      }
+    }
+  }
 
   final maznak = _StringCandidate('Mažňák');
   final tleskac = _StringCandidate('Tleskač');
@@ -239,12 +261,15 @@ class VotingEmbed<T extends Candidate> {
     await _updateLog(report);
   }
 
+  /// The other emoji shows up as a box on Windows 7.
+  final String _happyFace = _isWin7 ? '😄' : '😀';
+
   void _showHappiness(Voter<T> voter, bool happyVoter) {
     final element = Element.li()
       ..innerHtml = '${voter.name} '
           'je '
           '${happyVoter ? '' : 'ne'}spokojen${voter.feminine ? 'á' : 'ý'}. '
-          '<em>${happyVoter ? '😀' : '😡'}</em>';
+          '<em>${happyVoter ? _happyFace : '😡'}</em>';
     _logElement.children.add(element);
   }
 
