@@ -296,10 +296,6 @@ class VotingEmbed<T extends Candidate> {
   }
 
   void _walkThroughSteps() async {
-    // Wait until the first "step".
-    await _stepAheadQueue.next;
-
-    _playButton?.disabled = true;
     _logElement.children.clear();
     _logElement.children.add(Element.li()
       ..text = 'Všichni na značkách. Zde sledujte průběh hlasování.');
@@ -316,6 +312,11 @@ class VotingEmbed<T extends Candidate> {
       _progress = _voting.vote(_voters).toList();
       _setUpUI(_progress!.first);
     }
+
+    // Wait until the first "step".
+    await _stepAheadQueue.next;
+
+    _playButton?.disabled = true;
 
     for (final report in _progress!.skip(1)) {
       await _updateUI(report);
