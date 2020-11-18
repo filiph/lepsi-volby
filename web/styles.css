@@ -18,6 +18,10 @@ button {
   cursor: pointer;
 }
 
+button:active {
+  background-color: red;
+}
+
 button[disabled] {
   background-color: #aaaaaa;
   cursor: default;
@@ -58,4 +62,5 @@ button[disabled] {
 
 .signed {
   text-align: right;
+  margin-bottom: 10em;
 }

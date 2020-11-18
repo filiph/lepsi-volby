@@ -53,6 +53,8 @@ Future<void> main() async {
     querySelector('#plurality') as DivElement,
     InstantRunOffVoting(maxRounds: 0),
     runOffVoters,
+    candidateNominative: 'Restaurace',
+    candidateAccusative: 'Restauraci',
   );
 
   await plurality.init();
@@ -61,6 +63,8 @@ Future<void> main() async {
     querySelector('#instant') as DivElement,
     InstantRunOffVoting(),
     runOffVoters,
+    candidateNominative: 'Restaurace',
+    candidateAccusative: 'Restauraci',
   );
 
   await irv.init();
@@ -118,9 +122,16 @@ class VotingEmbed<T extends Candidate> {
   /// The other emoji shows up as a box on Windows 7.
   final String _happyFace = _isWin7 ? '😄' : '😀';
 
-  VotingEmbed(DivElement element, this._voting, this._voters,
-      {bool votersInput = false})
-      : _logElement = element.querySelector('.log') as UListElement,
+  final String candidateNominative, candidateAccusative;
+
+  VotingEmbed(
+    DivElement element,
+    this._voting,
+    this._voters, {
+    bool votersInput = false,
+    this.candidateNominative = 'Kandidát',
+    this.candidateAccusative = 'Kandidáta',
+  })  : _logElement = element.querySelector('.log') as UListElement,
         _barGraphElement = element.querySelector('.bargraph') as TableElement,
         _playButton = element.querySelector('.start_button') as ButtonElement?,
         _stepButton = element.querySelector('.step_button') as ButtonElement?,
@@ -182,7 +193,7 @@ class VotingEmbed<T extends Candidate> {
     _tableRows.clear();
     _barGraphElement.children.clear();
     final headRow = _barGraphElement.addRow();
-    headRow.children.add(Element.th()..text = 'Restaurace');
+    headRow.children.add(Element.th()..text = candidateNominative);
     headRow.children.add(Element.th());
     headRow.children.add(Element.th()..text = 'Hlasy');
     for (var candidate in initial.results.keys) {
@@ -231,16 +242,18 @@ class VotingEmbed<T extends Candidate> {
       final otherVotes = voter.votes.sublist(1);
 
       final buf = StringBuffer();
-      buf.write(
-          '${voter.name} hlasoval${voter.feminine ? 'a' : ''} pro restauraci '
+      buf.write('${voter.name} hlasoval${voter.feminine ? 'a' : ''} pro '
+          '${candidateAccusative.toLowerCase()} '
           '${firstVote}');
       if (otherVotes.isNotEmpty) {
         if (_voting.isPluralityVoting) {
-          buf.write(' (ale nevadil${otherVotes.length > 1 ? 'y' : 'a'} by '
-              '${voter.feminine ? 'jí' : 'mu'} ani '
-              'restaurace ${otherVotes.join(' nebo ')})');
+          buf.write(' (ale vzal${voter.feminine ? 'a' : ''} by '
+              'za vděk také '
+              '${candidateAccusative.toLowerCase()} '
+              '${otherVotes.join(' nebo ')})');
         } else {
-          buf.write(' v prvé řadě, ale dále také pro restaurace '
+          buf.write(' v prvé řadě, ale dále také pro '
+              '${candidateAccusative.toLowerCase()} '
               '${otherVotes.join(' a ')}');
         }
       }
@@ -256,7 +269,9 @@ class VotingEmbed<T extends Candidate> {
 
     if (report.isFinished) {
       await add('<strong>Je rozhodnuto!</strong> '
-          'Vyhrává restaurace <strong>${report.winner!}</strong>. '
+          'Vyhrává '
+          '${candidateNominative.toLowerCase()} '
+          '<strong>${report.winner!}</strong>. '
           '(Klikejte dál, abyste zjistili, '
           'jak jsou lidé spokojení s výsledkem.)');
       return;
@@ -264,7 +279,8 @@ class VotingEmbed<T extends Candidate> {
 
     if (report.worstThisRound.isNotEmpty) {
       assert(report.worstThisRound.length == 1);
-      await add('Restaurace ${report.worstThisRound.single} má moc málo hlasů. '
+      await add('${candidateNominative.toLowerCase()} '
+          '${report.worstThisRound.single} má moc málo hlasů. '
           'Vypadává. Hlasy lidí, co pro ni hlasovali, se přemístí do jejich '
           'druhé či třetí oblíbené volby.');
     }
