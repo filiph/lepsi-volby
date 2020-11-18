@@ -25,8 +25,8 @@ Future<void> main() async {
 
   if (_isWin7) {
     // Patch emojis to be compatible with Win7 (~10% of devices).
-    const classes = ['fA', 'fB', 'fC', 'fD', 'fE'];
-    const faces = ['👸', '👮', '🙇', '👲', '🙋'];
+    const classes = ['fA', 'fB', 'fC', 'fD', 'fE', 'flag'];
+    const faces = ['👸', '👮', '🙇', '👲', '🙋', 'ČR'];
     for (var i = 0; i < classes.length; i++) {
       final className = classes[i];
       final faceEmoji = faces[i];
