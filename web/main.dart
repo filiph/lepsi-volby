@@ -4,10 +4,6 @@ import 'dart:html';
 import 'package:async/async.dart';
 import 'package:instant_run_off_voting/instant_run_off_voting.dart';
 
-/// Windows 7 needs some special cases.
-final bool _isWin7 =
-    window.navigator.userAgent.toLowerCase().contains('windows nt 6.1');
-
 Future<void> main() async {
   final hogofogo = _StringCandidate('Hogofogo'); //  🍸
   final restyka = _StringCandidate('Reštyka'); //  🍷
@@ -79,6 +75,10 @@ Future<void> main() async {
   await serious.init();
 }
 
+/// Windows 7 needs some special cases.
+final bool _isWin7 =
+    window.navigator.userAgent.toLowerCase().contains('windows nt 6.1');
+
 class VotingEmbed<T extends Candidate> {
   final UListElement _logElement;
 
@@ -100,6 +100,23 @@ class VotingEmbed<T extends Candidate> {
   final StreamController<void> _stepAhead = StreamController();
 
   List<Voter<T>> _voters;
+
+  List<ProgressReport<T>>? _progress;
+
+  /// This is the maximum votes we expect a candidate will get. We use it for
+  /// scaling the bar charts.
+  int _maxVotes;
+
+  Duration _stepDuration = const Duration(milliseconds: 16);
+
+  final Map<T, SpanElement> _bars = {};
+
+  final Map<T, TableCellElement> _countCells = {};
+
+  final Map<T, TableRowElement> _tableRows = {};
+
+  /// The other emoji shows up as a box on Windows 7.
+  final String _happyFace = _isWin7 ? '😄' : '😀';
 
   VotingEmbed(DivElement element, this._voting, this._voters,
       {bool votersInput = false})
@@ -141,66 +158,22 @@ class VotingEmbed<T extends Candidate> {
     _walkThroughSteps();
   }
 
-  List<ProgressReport<T>>? _progress;
+  List<Voter<T>> _parseVoters(String string) {
+    final result = <Voter<_StringCandidate>>[];
 
-  /// This is the maximum votes we expect a candidate will get. We use it for
-  /// scaling the bar charts.
-  int _maxVotes;
-
-  Duration _stepDuration = const Duration(milliseconds: 16);
-
-  void _walkThroughSteps() async {
-    // Wait until the first "step".
-    await _stepAheadQueue.next;
-
-    _playButton?.disabled = true;
-    _logElement.children.clear();
-    _logElement.children.add(Element.li()
-      ..text = 'Všichni na značkách. Zde sledujte průběh hlasování.');
-
-    if (_votersInput != null) {
-      final votersCSV = _votersInput!.value;
-      _voters = _parseVoters(votersCSV!);
-      if (_voters.isEmpty) {
-        window.alert('Žádní voliči nepřišli.');
-        _playButton?.disabled = false;
-        return;
-      }
-      _maxVotes = _voters.length;
-      _progress = _voting.vote(_voters).toList();
-      _setUpUI(_progress!.first);
+    var i = 1;
+    final lines =
+        string.split('\n').map((e) => e.trim()).where((e) => e.isNotEmpty);
+    for (var line in lines) {
+      final voteStrings =
+          line.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty);
+      final votes = <_StringCandidate>[
+        for (var vote in voteStrings) _StringCandidate(vote),
+      ];
+      result.add(Voter(name: 'Volič ${i++}')..votes = votes);
     }
-
-    for (final report in _progress!.skip(1)) {
-      await _updateUI(report);
-    }
-
-    assert(_progress!.last.happyVoters.isNotEmpty);
-
-    for (var voter in _voters) {
-      _showHappiness(voter, _progress!.last.happyVoters[voter]!);
-      _logElement.scrollTop = _logElement.scrollHeight;
-      await _stepAheadQueue.next;
-    }
-    final percentage = 1 -
-        _progress!.last.happyVoters.entries
-                .where((element) => element.value)
-                .length /
-            _voters.length;
-    _logElement.children.add(Element.li()
-      ..text = '${(percentage * 100).round()} % voličů je nespokojených.');
-    _logElement.scrollTop = _logElement.scrollHeight;
-
-    _playButton?.disabled = false;
-    _stepButton?.disabled = true;
-    isFinished = true;
+    return result as List<Voter<T>>;
   }
-
-  final Map<T, SpanElement> _bars = {};
-
-  final Map<T, TableCellElement> _countCells = {};
-
-  final Map<T, TableRowElement> _tableRows = {};
 
   void _setUpUI(ProgressReport<T> initial) {
     assert(initial.round == 0);
@@ -235,34 +208,6 @@ class VotingEmbed<T extends Candidate> {
       barCell.children.add(barWrapper);
     }
   }
-
-  Future<void> _updateUI(ProgressReport<T> report) async {
-    // Update bar graph for each candidate.
-    for (var candidate in report.results.keys) {
-      final isEliminated = report.eliminatedLastRound.contains(candidate);
-      final isWinner = report.isFinished && report.winner == candidate;
-      final countCell = _countCells[candidate]!;
-      final bar = _bars[candidate]!;
-      final votes = report.results[candidate]!;
-      countCell.text = votes.toString();
-      String width;
-      if (votes == 0) {
-        width = '1px';
-      } else {
-        width = '${votes / _maxVotes * 100}%';
-      }
-      bar.style.width = width;
-      bar.style.backgroundColor = isEliminated ? 'gray' : 'blue';
-      if (isWinner) {
-        _tableRows[candidate]!.classes.add('winner');
-      }
-    }
-
-    await _updateLog(report);
-  }
-
-  /// The other emoji shows up as a box on Windows 7.
-  final String _happyFace = _isWin7 ? '😄' : '😀';
 
   void _showHappiness(Voter<T> voter, bool happyVoter) {
     final element = Element.li()
@@ -325,21 +270,76 @@ class VotingEmbed<T extends Candidate> {
     }
   }
 
-  List<Voter<T>> _parseVoters(String string) {
-    final result = <Voter<_StringCandidate>>[];
-
-    var i = 1;
-    final lines =
-        string.split('\n').map((e) => e.trim()).where((e) => e.isNotEmpty);
-    for (var line in lines) {
-      final voteStrings =
-          line.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty);
-      final votes = <_StringCandidate>[
-        for (var vote in voteStrings) _StringCandidate(vote),
-      ];
-      result.add(Voter(name: 'Volič ${i++}')..votes = votes);
+  Future<void> _updateUI(ProgressReport<T> report) async {
+    // Update bar graph for each candidate.
+    for (var candidate in report.results.keys) {
+      final isEliminated = report.eliminatedLastRound.contains(candidate);
+      final isWinner = report.isFinished && report.winner == candidate;
+      final countCell = _countCells[candidate]!;
+      final bar = _bars[candidate]!;
+      final votes = report.results[candidate]!;
+      countCell.text = votes.toString();
+      String width;
+      if (votes == 0) {
+        width = '1px';
+      } else {
+        width = '${votes / _maxVotes * 100}%';
+      }
+      bar.style.width = width;
+      bar.style.backgroundColor = isEliminated ? 'gray' : 'blue';
+      if (isWinner) {
+        _tableRows[candidate]!.classes.add('winner');
+      }
     }
-    return result as List<Voter<T>>;
+
+    await _updateLog(report);
+  }
+
+  void _walkThroughSteps() async {
+    // Wait until the first "step".
+    await _stepAheadQueue.next;
+
+    _playButton?.disabled = true;
+    _logElement.children.clear();
+    _logElement.children.add(Element.li()
+      ..text = 'Všichni na značkách. Zde sledujte průběh hlasování.');
+
+    if (_votersInput != null) {
+      final votersCSV = _votersInput!.value;
+      _voters = _parseVoters(votersCSV!);
+      if (_voters.isEmpty) {
+        window.alert('Žádní voliči nepřišli.');
+        _playButton?.disabled = false;
+        return;
+      }
+      _maxVotes = _voters.length;
+      _progress = _voting.vote(_voters).toList();
+      _setUpUI(_progress!.first);
+    }
+
+    for (final report in _progress!.skip(1)) {
+      await _updateUI(report);
+    }
+
+    assert(_progress!.last.happyVoters.isNotEmpty);
+
+    for (var voter in _voters) {
+      _showHappiness(voter, _progress!.last.happyVoters[voter]!);
+      _logElement.scrollTop = _logElement.scrollHeight;
+      await _stepAheadQueue.next;
+    }
+    final percentage = 1 -
+        _progress!.last.happyVoters.entries
+                .where((element) => element.value)
+                .length /
+            _voters.length;
+    _logElement.children.add(Element.li()
+      ..text = '${(percentage * 100).round()} % voličů je nespokojených.');
+    _logElement.scrollTop = _logElement.scrollHeight;
+
+    _playButton?.disabled = false;
+    _stepButton?.disabled = true;
+    isFinished = true;
   }
 }
 
@@ -349,9 +349,7 @@ class _StringCandidate extends Candidate {
   _StringCandidate(this.name);
 
   @override
-  String toString() {
-    return '$name';
-  }
+  int get hashCode => name.hashCode;
 
   @override
   bool operator ==(Object other) {
@@ -359,5 +357,7 @@ class _StringCandidate extends Candidate {
   }
 
   @override
-  int get hashCode => name.hashCode;
+  String toString() {
+    return '$name';
+  }
 }
