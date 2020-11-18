@@ -335,7 +335,7 @@ class VotingEmbed<T extends Candidate> {
                 .length /
             _voters.length;
     _logElement.children.add(Element.li()
-      ..text = '${(percentage * 100).round()} % voličů je nespokojených.');
+      ..text = '${(percentage * 100).round()} % lidí je nespokojených.');
     _logElement.scrollTop = _logElement.scrollHeight;
 
     _playButton?.disabled = false;
