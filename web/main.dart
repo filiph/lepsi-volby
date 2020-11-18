@@ -282,7 +282,7 @@ class VotingEmbed<T extends Candidate> {
 
     if (report.worstThisRound.isNotEmpty) {
       assert(report.worstThisRound.length == 1);
-      await add('${candidateNominative.toLowerCase()} '
+      await add('$candidateNominative '
           '${report.worstThisRound.single} má moc málo hlasů. '
           'Vypadává. Hlasy lidí, co pro ni hlasovali, se přemístí do jejich '
           'druhé či třetí oblíbené volby.');
