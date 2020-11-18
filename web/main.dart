@@ -122,7 +122,8 @@ class VotingEmbed<T extends Candidate> {
   /// The other emoji shows up as a box on Windows 7.
   final String _happyFace = _isWin7 ? '😄' : '😀';
 
-  final String _sadFace = _isWin7 ? '😕' : '😡';
+  /// Currently, we're using the same emoji.
+  final String _sadFace = _isWin7 ? '😡' : '😡';
 
   final String candidateNominative, candidateAccusative;
 
